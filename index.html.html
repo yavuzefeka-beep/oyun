@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Malzeme Eşleştirme Oyunu</title>
+    <style>
+        body {
+            font-family: 'Comic Sans MS', 'Arial', sans-serif;
+            background-color: #f0f8ff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        h1 {
+            color: #ff6b6b;
+            text-shadow: 2px 2px #ffe66d;
+            margin-bottom: 20px;
+        }
+
+        .game-info {
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+            color: #333;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            width: 90%;
+            max-width: 400px;
+            perspective: 1000px;
+        }
+
+        .card {
+            background-color: #fff;
+            border-radius: 10px;
+            height: 80px;
+            position: relative;
+            cursor: pointer;
+            transform-style: preserve-3d;
+            transition: transform 0.5s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .card:active {
+            transform: scale(0.95);
+        }
+
+        .card.flip {
+            transform: rotateY(180deg);
+        }
+
+        .front-face, .back-face {
+            width: 100%;
+            height: 100%;
+            padding: 5px;
+            position: absolute;
+            border-radius: 10px;
+            backface-visibility: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            font-weight: bold;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .front-face {
+            background-color: #4ecdc4;
+            color: white;
+            transform: rotateY(180deg);
+            border: 3px solid #ff6b6b;
+        }
+
+        .front-face span {
+            font-size: 2rem;
+        }
+
+        .back-face {
+            background-color: #ffe66d;
+            color: #ff6b6b;
+            font-size: 2rem;
+            border: 3px solid #4ecdc4;
+        }
+
+        /* Başarı Animasyonu */
+        @keyframes pop {
+            0% { transform: scale(1) rotateY(180deg); }
+            50% { transform: scale(1.2) rotateY(180deg); }
+            100% { transform: scale(1) rotateY(180deg); }
+        }
+
+        .card.match .front-face {
+            background-color: #95e1d3;
+            border-color: #2ecc71;
+            animation: pop 0.5s ease-in-out;
+        }
+
+        /* Buton Stili */
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 1.2rem;
+            background-color: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px #c0392b;
+            transition: transform 0.1s;
+        }
+
+        button:active {
+            transform: translateY(4px);
+            box-shadow: none;
+        }
+
+        .confetti {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Malzeme Eşleştir!</h1>
+    <div class="game-info">Hamle: <span id="moves">0</span></div>
+
+    <div class="grid-container" id="gameGrid">
+        </div>
+
+    <button onclick="resetGame()">Yeniden Başla</button>
+    <div id="confetti" class="confetti">🎉 TEBRİKLER! 🎉</div>
+
+    <script>
+        const grid = document.getElementById('gameGrid');
+        const movesDisplay = document.getElementById('moves');
+        
+        // Malzeme Listesi (İkon ve İsim)
+        const materials = [
+            { name: 'Taş', icon: '🪨' },
+            { name: 'Tuğla', icon: '🧱' },
+            { name: 'Ahşap', icon: '🪵' },
+            { name: 'Cam', icon: '🪟' },
+            { name: 'Metal', icon: '🔩' },
+            { name: 'Beton', icon: '🏗️' }
+        ];
+
+        let cardsArray = [];
+        let hasFlippedCard = false;
+        let lockBoard = false;
+        let firstCard, secondCard;
+        let moves = 0;
+        let matchesFound = 0;
+
+        function initGame() {
+            // Diziyi kopyala ve karıştır (Çift olması için 2 kere ekliyoruz)
+            cardsArray = [...materials, ...materials];
+            cardsArray.sort(() => 0.5 - Math.random());
+            
+            grid.innerHTML = '';
+            moves = 0;
+            matchesFound = 0;
+            movesDisplay.innerText = moves;
+            document.getElementById('confetti').style.display = 'none';
+            document.querySelector('h1').innerText = "Malzeme Eşleştir!";
+
+            cardsArray.forEach(item => {
+                const card = document.createElement('div');
+                card.classList.add('card');
+                card.dataset.name = item.name;
+
+                const frontFace = document.createElement('div');
+                frontFace.classList.add('front-face');
+                frontFace.innerHTML = `<span>${item.icon}</span><br>${item.name}`;
+
+                const backFace = document.createElement('div');
+                backFace.classList.add('back-face');
+                backFace.innerText = '?';
+
+                card.appendChild(frontFace);
+                card.appendChild(backFace);
+                grid.appendChild(card);
+
+                card.addEventListener('click', flipCard);
+            });
+        }
+
+        function flipCard() {
+            if (lockBoard) return;
+            if (this === firstCard) return;
+
+            this.classList.add('flip');
+
+            if (!hasFlippedCard) {
+                // İlk kart
+                hasFlippedCard = true;
+                firstCard = this;
+                return;
+            }
+
+            // İkinci kart
+            secondCard = this;
+            incrementMoves();
+            checkForMatch();
+        }
+
+        function checkForMatch() {
+            let isMatch = firstCard.dataset.name === secondCard.dataset.name;
+
+            isMatch ? disableCards() : unflipCards();
+        }
+
+        function disableCards() {
+            firstCard.classList.add('match');
+            secondCard.classList.add('match');
+            
+            firstCard.removeEventListener('click', flipCard);
+            secondCard.removeEventListener('click', flipCard);
+
+            matchesFound++;
+            if (matchesFound === materials.length) {
+                setTimeout(() => {
+                    document.querySelector('h1').innerText = "Harikasın! 🏆";
+                    document.getElementById('confetti').style.display = 'flex';
+                    document.getElementById('confetti').style.justifyContent = 'center';
+                    document.getElementById('confetti').style.alignItems = 'center';
+                    document.getElementById('confetti').style.fontSize = '3rem';
+                    document.getElementById('confetti').style.backgroundColor = 'rgba(255,255,255,0.8)';
+                }, 500);
+            }
+
+            resetBoard();
+        }
+
+        function unflipCards() {
+            lockBoard = true;
+
+            setTimeout(() => {
+                firstCard.classList.remove('flip');
+                secondCard.classList.remove('flip');
+                resetBoard();
+            }, 1000);
+        }
+
+        function resetBoard() {
+            [hasFlippedCard, lockBoard] = [false, false];
+            [firstCard, secondCard] = [null, null];
+        }
+
+        function incrementMoves() {
+            moves++;
+            movesDisplay.innerText = moves;
+        }
+
+        function resetGame() {
+            initGame();
+        }
+
+        // Oyunu başlat
+        initGame();
+    </script>
+</body>
+</html>
